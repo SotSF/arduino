@@ -1,5 +1,7 @@
 #include <FastLED.h>
 
+FASTLED_USING_NAMESPACE
+
 #define SND_SNS_PIN       12
 #define INF_LED_PIN       3
 #define BKG_LED_PIN       5
@@ -10,19 +12,79 @@
 #define INIT_CYCLES_PER_FRAME    10000
 
 int cycleCounter = 0;
-int cols = 0;
-int maxCols = 50;
-int countPrint = 4000;
 int soundVal = 1;
 bool gReverseDirection = false;
 
 int cyclesPerFrame;
-int mode = 0;
 bool sound = false;
 bool soundLast = false;
 long cyclesSinceSound = 0;
 
 CRGB leds[NUM_LEDS];
+
+//ColorPalette--------------------------------------------------
+CRGBPalette16 currentPalette;
+TBlendType    currentBlending;
+
+extern CRGBPalette16 myRedWhiteBluePalette;
+extern const TProgmemPalette16 myRedWhiteBluePalette_p PROGMEM;
+//ColorPalette--------------------------------------------------
+
+//Fire----------------------------------------------------------
+void fire()
+{
+  cyclesPerFrame = 10000;
+  
+  // Array of temperature readings at each simulation cell
+  static byte heat[NUM_LEDS];
+
+  // Step 1.  Cool down every cell a little
+    for( int i = 0; i < NUM_LEDS; i++) {
+      heat[i] = qsub8( heat[i],  random8(0, ((55 * 10) / NUM_LEDS) + 2));
+    }
+  
+    // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+    for( int k= NUM_LEDS - 1; k >= 2; k--) {
+      heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
+    }
+    
+    // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+    if( random8() < 120 ) {
+      int y = random8(7);
+      heat[y] = qadd8( heat[y], random8(160,255) );
+    }
+
+    // Step 4.  Map from heat cells to LED colors
+    for( int j = 0; j < NUM_LEDS; j++) {
+      CRGB color = HeatColor( heat[j]);
+      int pixelnumber;
+      if( gReverseDirection ) {
+        pixelnumber = (NUM_LEDS-1) - j;
+      } else {
+        pixelnumber = j;
+      }
+      leds[pixelnumber] = color;
+    }
+}
+//Fire----------------------------------------------------------
+
+//PatternRotation-----------------------------------------------
+// List of patterns to cycle through.  Each is defined as a separate function below.
+typedef void (*SimplePatternList[])();
+SimplePatternList patternList = { fire, colorPalette, colorTemperature, rainbow, rainbowWithGlitter, confetti, sinelon, juggle, bpm };
+uint8_t pattNum = 0;    // Index number of which pattern is current
+uint8_t gHue = 0;       // rotating "base color" used by many of the patterns
+//PatternRotation-----------------------------------------------
+
+//ColorTemperature----------------------------------------------
+#define TEMPERATURE_1 Tungsten100W
+#define TEMPERATURE_2 OvercastSky
+
+// How many seconds to show each temperature before switching
+#define DISPLAYTIME 20
+// How many seconds to show black between switches
+#define BLACKTIME   3
+//ColorTemperature----------------------------------------------
 
 void setup() {
   // sanity delay
@@ -40,6 +102,9 @@ void setup() {
 
   // default number of cycles that constitute a frame are initialized here
   cyclesPerFrame = INIT_CYCLES_PER_FRAME;
+  
+  currentPalette = RainbowColors_p;
+  currentBlending = LINEARBLEND;
 }
 
 void loop() {
@@ -49,41 +114,21 @@ void loop() {
 
   // if the cycleCounter has counted up to a new frame
   if (cycleCounter >= cyclesPerFrame) {
+
+    patternList[pattNum]();
     
     // reset the cycleCounter
     cycleCounter = 0;
-
-    switch(mode) {
-      case 0:
-        Fire();
-        break;
-      
-      case 1:
-        SolidColor(255,0,0);
-        break;
-        
-      case 2:
-        SolidColor(0,255,0);
-        break;
-        
-      case 3:
-        SolidColor(0,0,255);
-        break;
-    }
     
     FastLED.show();
   }
 
-  // if a sound is ending, switch modes
+  // if a sound is ending, switch patterns
   cyclesSinceSound++;
   sound = checkSound();
   if ( soundLast && !sound && (cyclesSinceSound > 10000) ) {
     cyclesSinceSound = 0;
-    
-    if (mode == 0) mode = 1;
-    else if (mode == 1) mode = 2;
-    else if (mode == 2) mode = 3;
-    else if (mode == 3) mode = 0;
+    nextPattern();
   }
   soundLast = sound;
     
@@ -93,6 +138,14 @@ void loop() {
 // Utility Functions
 //-----------------------------------------------------------
 
+#define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
+
+void nextPattern()
+{
+  // add one to the current pattern number, and wrap around at the end
+  pattNum = (pattNum + 1) % ARRAY_SIZE( patternList);
+}
+
 bool checkSound() {
   if (digitalRead(SND_SNS_PIN) == 0)
     return true;
@@ -100,45 +153,10 @@ bool checkSound() {
     return false;
 }
 
-//-----------------------------------------------------------
-// Mode Functions
-//-----------------------------------------------------------
-
-#define COOLING  55
-#define SPARKING 120
-
-void Fire()
-{
-// Array of temperature readings at each simulation cell
-  static byte heat[NUM_LEDS];
-
-  // Step 1.  Cool down every cell a little
-    for( int i = 0; i < NUM_LEDS; i++) {
-      heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / NUM_LEDS) + 2));
-    }
-  
-    // Step 2.  Heat from each cell drifts 'up' and diffuses a little
-    for( int k= NUM_LEDS - 1; k >= 2; k--) {
-      heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
-    }
-    
-    // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
-    if( random8() < SPARKING ) {
-      int y = random8(7);
-      heat[y] = qadd8( heat[y], random8(160,255) );
-    }
-
-    // Step 4.  Map from heat cells to LED colors
-    for( int j = 0; j < NUM_LEDS; j++) {
-      CRGB color = HeatColor( heat[j]);
-      int pixelnumber;
-      if( gReverseDirection ) {
-        pixelnumber = (NUM_LEDS-1) - j;
-      } else {
-        pixelnumber = j;
-      }
-      leds[pixelnumber] = color;
-    }
+void fadeAll() {
+  for(int i = 0; i < NUM_LEDS; i++) {
+    leds[i].nscale8(250);
+  }
 }
 
 void SolidColor(int r, int g, int b)
@@ -147,4 +165,248 @@ void SolidColor(int r, int g, int b)
     leds[j].setRGB(r,g,b);
   }
 }
+
+//-----------------------------------------------------------
+// Pattern Functions
+//-----------------------------------------------------------
+
+/* for fire() function, see above */
+
+//-----------------------------------------------------------
+
+void colorPalette() {
+  cyclesPerFrame = 10000;
+  ChangePalettePeriodically();
+  
+  static uint8_t startIndex = 0;
+  startIndex = startIndex + 1; /* motion speed */
+  
+  FillLEDsFromPaletteColors( startIndex);
+}
+
+void FillLEDsFromPaletteColors( uint8_t colorIndex)
+{
+    uint8_t brightness = 255;
+    
+    for( int i = 0; i < NUM_LEDS; i++) {
+        leds[i] = ColorFromPalette( currentPalette, colorIndex, brightness, currentBlending);
+        colorIndex += 3;
+    }
+}
+
+void ChangePalettePeriodically()
+{
+    uint8_t secondHand = (millis() / 1000) % 60;
+    static uint8_t lastSecond = 99;
+    
+    if( lastSecond != secondHand) {
+        lastSecond = secondHand;
+        if( secondHand ==  0)  { currentPalette = RainbowColors_p;         currentBlending = LINEARBLEND; }
+        if( secondHand == 10)  { currentPalette = RainbowStripeColors_p;   currentBlending = NOBLEND;  }
+        if( secondHand == 15)  { currentPalette = RainbowStripeColors_p;   currentBlending = LINEARBLEND; }
+        if( secondHand == 20)  { SetupPurpleAndGreenPalette();             currentBlending = LINEARBLEND; }
+        if( secondHand == 25)  { SetupTotallyRandomPalette();              currentBlending = LINEARBLEND; }
+        if( secondHand == 30)  { SetupBlackAndWhiteStripedPalette();       currentBlending = NOBLEND; }
+        if( secondHand == 35)  { SetupBlackAndWhiteStripedPalette();       currentBlending = LINEARBLEND; }
+        if( secondHand == 40)  { currentPalette = CloudColors_p;           currentBlending = LINEARBLEND; }
+        if( secondHand == 45)  { currentPalette = PartyColors_p;           currentBlending = LINEARBLEND; }
+        if( secondHand == 50)  { currentPalette = myRedWhiteBluePalette_p; currentBlending = NOBLEND;  }
+        if( secondHand == 55)  { currentPalette = myRedWhiteBluePalette_p; currentBlending = LINEARBLEND; }
+    }
+}
+
+// This function fills the palette with totally random colors.
+void SetupTotallyRandomPalette()
+{
+    for( int i = 0; i < 16; i++) {
+        currentPalette[i] = CHSV( random8(), 255, random8());
+    }
+}
+
+// This function sets up a palette of black and white stripes,
+// using code.  Since the palette is effectively an array of
+// sixteen CRGB colors, the various fill_* functions can be used
+// to set them up.
+void SetupBlackAndWhiteStripedPalette()
+{
+    // 'black out' all 16 palette entries...
+    fill_solid( currentPalette, 16, CRGB::Black);
+    // and set every fourth one to white.
+    currentPalette[0] = CRGB::White;
+    currentPalette[4] = CRGB::White;
+    currentPalette[8] = CRGB::White;
+    currentPalette[12] = CRGB::White;
+    
+}
+
+// This function sets up a palette of purple and green stripes.
+void SetupPurpleAndGreenPalette()
+{
+    CRGB purple = CHSV( HUE_PURPLE, 255, 255);
+    CRGB green  = CHSV( HUE_GREEN, 255, 255);
+    CRGB black  = CRGB::Black;
+    
+    currentPalette = CRGBPalette16(
+                                   green,  green,  black,  black,
+                                   purple, purple, black,  black,
+                                   green,  green,  black,  black,
+                                   purple, purple, black,  black );
+}
+
+
+// This example shows how to set up a static color palette
+// which is stored in PROGMEM (flash), which is almost always more
+// plentiful than RAM.  A static PROGMEM palette like this
+// takes up 64 bytes of flash.
+const TProgmemPalette16 myRedWhiteBluePalette_p PROGMEM =
+{
+    CRGB::Red,
+    CRGB::Gray, // 'white' is too bright compared to red and blue
+    CRGB::Blue,
+    CRGB::Black,
+    
+    CRGB::Red,
+    CRGB::Gray,
+    CRGB::Blue,
+    CRGB::Black,
+    
+    CRGB::Red,
+    CRGB::Red,
+    CRGB::Gray,
+    CRGB::Gray,
+    CRGB::Blue,
+    CRGB::Blue,
+    CRGB::Black,
+    CRGB::Black
+};
+
+//-----------------------------------------------------------
+
+void colorTemperature()
+{
+  cyclesPerFrame = 10000;
+  // draw a generic, no-name rainbow
+  static uint8_t starthue = 0;
+  fill_rainbow( leds + 5, NUM_LEDS - 5, --starthue, 20);
+
+  // Choose which 'color temperature' profile to enable.
+  uint8_t secs = (millis() / 1000) % (DISPLAYTIME * 2);
+  if( secs < DISPLAYTIME) {
+    FastLED.setTemperature( TEMPERATURE_1 ); // first temperature
+    leds[0] = TEMPERATURE_1; // show indicator pixel
+  } else {
+    FastLED.setTemperature( TEMPERATURE_2 ); // second temperature
+    leds[0] = TEMPERATURE_2; // show indicator pixel
+  }
+
+  // Black out the LEDs for a few secnds between color changes
+  // to let the eyes and brains adjust
+  if( (secs % DISPLAYTIME) < BLACKTIME) {
+    memset8( leds, 0, NUM_LEDS * sizeof(CRGB));
+  }
+}
+
+//-----------------------------------------------------------
+
+void cylon()
+{
+  cyclesPerFrame = 10000;
+  static uint8_t hue = 0;
+  // First slide the led in one direction
+  for(int i = 0; i < NUM_LEDS; i++) {
+    // Set the i'th led to red 
+    leds[i] = CHSV(hue++, 255, 255);
+    // Show the leds
+    FastLED.show(); 
+    // now that we've shown the leds, reset the i'th led to black
+    // leds[i] = CRGB::Black;
+    fadeAll();
+    // Wait a little bit before we loop around and do it again
+    delay(10);
+  }
+
+  // Now go in the other direction.  
+  for(int i = (NUM_LEDS)-1; i >= 0; i--) {
+    // Set the i'th led to red 
+    leds[i] = CHSV(hue++, 255, 255);
+    // Show the leds
+    FastLED.show();
+    // now that we've shown the leds, reset the i'th led to black
+    // leds[i] = CRGB::Black;
+    fadeAll();
+    // Wait a little bit before we loop around and do it again
+    delay(10);
+  }
+}
+
+//-----------------------------------------------------------
+
+void rainbow() 
+{
+  // FastLED's built-in rainbow generator
+  fill_rainbow( leds, NUM_LEDS, gHue, 7);
+}
+
+//-----------------------------------------------------------
+
+void rainbowWithGlitter() 
+{
+  // built-in FastLED rainbow, plus some random sparkly glitter
+  rainbow();
+  addGlitter(80);
+}
+
+void addGlitter( fract8 chanceOfGlitter) 
+{
+  if( random8() < chanceOfGlitter) {
+    leds[ random16(NUM_LEDS) ] += CRGB::White;
+  }
+}
+
+//-----------------------------------------------------------
+
+void confetti() 
+{
+  // random colored speckles that blink in and fade smoothly
+  fadeToBlackBy( leds, NUM_LEDS, 10);
+  int pos = random16(NUM_LEDS);
+  leds[pos] += CHSV( gHue + random8(64), 200, 255);
+}
+
+//-----------------------------------------------------------
+
+void sinelon()
+{
+  // a colored dot sweeping back and forth, with fading trails
+  fadeToBlackBy( leds, NUM_LEDS, 20);
+  int pos = beatsin16(13,0,NUM_LEDS);
+  leds[pos] += CHSV( gHue, 255, 192);
+}
+
+//-----------------------------------------------------------
+
+void bpm()
+{
+  // colored stripes pulsing at a defined Beats-Per-Minute (BPM)
+  uint8_t BeatsPerMinute = 62;
+  CRGBPalette16 palette = PartyColors_p;
+  uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
+  for( int i = 0; i < NUM_LEDS; i++) { //9948
+    leds[i] = ColorFromPalette(palette, gHue+(i*2), beat-gHue+(i*10));
+  }
+}
+
+//-----------------------------------------------------------
+
+void juggle() {
+  // eight colored dots, weaving in and out of sync with each other
+  fadeToBlackBy( leds, NUM_LEDS, 20);
+  byte dothue = 0;
+  for( int i = 0; i < 8; i++) {
+    leds[beatsin16(i+7,0,NUM_LEDS)] |= CHSV(dothue, 200, 255);
+    dothue += 32;
+  }
+}
+
+
 
