@@ -7,18 +7,18 @@ FASTLED_USING_NAMESPACE
 #define BKG_LED_PIN       5
 #define COLOR_ORDER       GRB
 #define CHIPSET           WS2812B
-#define NUM_LEDS          40
+#define NUM_LEDS          60
 #define BRIGHTNESS        50
-#define INIT_CYCLES_PER_FRAME    10000
-
-int cycleCounter = 0;
+#define INIT_FRAMES_PER_SECOND   30
+#define SOUND_THRESHOLD_MS       5
 int soundVal = 1;
 bool gReverseDirection = false;
 
-int cyclesPerFrame;
 bool sound = false;
 bool soundLast = false;
-long cyclesSinceSound = 0;
+unsigned long timeOfLastFrame;
+unsigned long timeOfLastSound;
+int framesPS;
 
 CRGB leds[NUM_LEDS];
 
@@ -33,14 +33,14 @@ extern const TProgmemPalette16 myRedWhiteBluePalette_p PROGMEM;
 //Fire----------------------------------------------------------
 void fire()
 {
-  cyclesPerFrame = 10000;
+  framesPS = 20;
   
   // Array of temperature readings at each simulation cell
   static byte heat[NUM_LEDS];
 
   // Step 1.  Cool down every cell a little
     for( int i = 0; i < NUM_LEDS; i++) {
-      heat[i] = qsub8( heat[i],  random8(0, ((55 * 10) / NUM_LEDS) + 2));
+      heat[i] = qsub8( heat[i],  random8(0, ((60 * 10) / NUM_LEDS) + 2));
     }
   
     // Step 2.  Heat from each cell drifts 'up' and diffuses a little
@@ -100,8 +100,9 @@ void setup() {
   
   Serial.begin(9600);
 
-  // default number of cycles that constitute a frame are initialized here
-  cyclesPerFrame = INIT_CYCLES_PER_FRAME;
+  timeOfLastFrame = millis();
+  timeOfLastSound = millis();
+  framesPS = INIT_FRAMES_PER_SECOND;
   
   currentPalette = RainbowColors_p;
   currentBlending = LINEARBLEND;
@@ -109,29 +110,24 @@ void setup() {
 
 void loop() {
 
-  // increment the cycleCounter
-  cycleCounter++;
+  if ( (millis() - timeOfLastFrame) >= (1000 / framesPS) ) {
 
-  // if the cycleCounter has counted up to a new frame
-  if (cycleCounter >= cyclesPerFrame) {
-
+    timeOfLastFrame = millis();    
     patternList[pattNum]();
-    
-    // reset the cycleCounter
-    cycleCounter = 0;
-    
     FastLED.show();
+    
   }
 
-  // if a sound is ending, switch patterns
-  cyclesSinceSound++;
+  // if a sound is starting, switch patterns
   sound = checkSound();
-  if ( soundLast && !sound && (cyclesSinceSound > 10000) ) {
-    cyclesSinceSound = 0;
+  if ( !soundLast && sound && ( (millis() - timeOfLastSound) > SOUND_THRESHOLD_MS) ) {
+    
+    timeOfLastSound = millis();
     nextPattern();
+    
   }
   soundLast = sound;
-    
+  
 }
 
 //-----------------------------------------------------------
@@ -175,13 +171,13 @@ void SolidColor(int r, int g, int b)
 //-----------------------------------------------------------
 
 void colorPalette() {
-  cyclesPerFrame = 10000;
+  framesPS = 30;
   ChangePalettePeriodically();
   
   static uint8_t startIndex = 0;
   startIndex = startIndex + 1; /* motion speed */
   
-  FillLEDsFromPaletteColors( startIndex);
+  FillLEDsFromPaletteColors(startIndex);
 }
 
 void FillLEDsFromPaletteColors( uint8_t colorIndex)
@@ -284,7 +280,7 @@ const TProgmemPalette16 myRedWhiteBluePalette_p PROGMEM =
 
 void colorTemperature()
 {
-  cyclesPerFrame = 10000;
+  framesPS = 30;
   // draw a generic, no-name rainbow
   static uint8_t starthue = 0;
   fill_rainbow( leds + 5, NUM_LEDS - 5, --starthue, 20);
@@ -310,7 +306,7 @@ void colorTemperature()
 
 void cylon()
 {
-  cyclesPerFrame = 10000;
+  framesPS = 30;
   static uint8_t hue = 0;
   // First slide the led in one direction
   for(int i = 0; i < NUM_LEDS; i++) {
