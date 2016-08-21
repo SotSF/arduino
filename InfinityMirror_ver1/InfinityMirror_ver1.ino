@@ -16,6 +16,7 @@ bool gReverseDirection = false;
 
 bool sound = false;
 bool soundLast = false;
+bool newPatt = true;
 unsigned long timeOfLastFrame;
 unsigned long timeOfLastSound;
 int framesPS;
@@ -140,6 +141,7 @@ void nextPattern()
 {
   // add one to the current pattern number, and wrap around at the end
   pattNum = (pattNum + 1) % ARRAY_SIZE( patternList);
+  newPatt = true;
 }
 
 bool checkSound() {
@@ -169,6 +171,68 @@ void SolidColor(int r, int g, int b)
 /* for fire() function, see above */
 
 //-----------------------------------------------------------
+
+void colorPaletteRainbow1() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    currentPalette = RainbowColors_p;         
+    currentBlending = LINEARBLEND; 
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPaletteRainbow2() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+  
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    currentPalette = RainbowStripeColors_p;         
+    currentBlending = NOBLEND; 
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPaletteRainbow3() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    currentPalette = RainbowStripeColors_p;         
+    currentBlending = LINEARBLEND; 
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPalettePurpleAndGreen() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    SetupPurpleAndGreenPalette();
+    currentBlending = LINEARBLEND;
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+// ...............................ETC - fill from other things below
 
 void colorPalette() {
   framesPS = 30;
