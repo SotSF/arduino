@@ -7,7 +7,7 @@ FASTLED_USING_NAMESPACE
 #define BKG_LED_PIN       5
 #define COLOR_ORDER       GRB
 #define CHIPSET           WS2812B
-#define NUM_LEDS          60
+#define NUM_LEDS          195
 #define BRIGHTNESS        50
 #define INIT_FRAMES_PER_SECOND   30
 #define SOUND_THRESHOLD_MS       5
@@ -34,14 +34,14 @@ extern const TProgmemPalette16 myRedWhiteBluePalette_p PROGMEM;
 //Fire----------------------------------------------------------
 void fire()
 {
-  framesPS = 20;
+  framesPS = 30;
   
   // Array of temperature readings at each simulation cell
   static byte heat[NUM_LEDS];
 
   // Step 1.  Cool down every cell a little
     for( int i = 0; i < NUM_LEDS; i++) {
-      heat[i] = qsub8( heat[i],  random8(0, ((60 * 10) / NUM_LEDS) + 2));
+      heat[i] = qsub8( heat[i],  random8(0, ((55 * 10) / NUM_LEDS) + 2));
     }
   
     // Step 2.  Heat from each cell drifts 'up' and diffuses a little
@@ -72,7 +72,8 @@ void fire()
 //PatternRotation-----------------------------------------------
 // List of patterns to cycle through.  Each is defined as a separate function below.
 typedef void (*SimplePatternList[])();
-SimplePatternList patternList = { fire, colorPalette, colorTemperature, rainbow, rainbowWithGlitter, confetti, sinelon, juggle, bpm };
+SimplePatternList patternList = { fire, colorPaletteRainbow1, colorPaletteRainbow2, colorPaletteRainbow3, colorPalettePurpleAndGreen, colorPaletteTotallyRandom, colorPaletteBlackAndWhiteStriped1, colorPaletteBlackAndWhiteStriped2, colorPaletteCloudColors, colorPalettePartyColors
+, colorTemperature, rainbow, rainbowWithGlitter, confetti, sinelon, juggle, bpm };
 uint8_t pattNum = 0;    // Index number of which pattern is current
 uint8_t gHue = 0;       // rotating "base color" used by many of the patterns
 //PatternRotation-----------------------------------------------
@@ -111,16 +112,26 @@ void setup() {
 
 void loop() {
 
+  // perform a periodic check for the sound signal
+  sound = false;
+  if ( !sound && checkSound() ) sound = true;
+  
   if ( (millis() - timeOfLastFrame) >= (1000 / framesPS) ) {
 
     timeOfLastFrame = millis();    
     patternList[pattNum]();
+
+    // perform a periodic check for the sound signal
+    if ( !sound && checkSound() ) sound = true;
+    
     FastLED.show();
     
   }
 
+  // perform a periodic check for the sound signal
+  if ( !sound && checkSound() ) sound = true;
+
   // if a sound is starting, switch patterns
-  sound = checkSound();
   if ( !soundLast && sound && ( (millis() - timeOfLastSound) > SOUND_THRESHOLD_MS) ) {
     
     timeOfLastSound = millis();
@@ -209,7 +220,7 @@ void colorPaletteRainbow3() {
   if (newPatt) {
     newPatt = false;
     startIndex = 0;
-    currentPalette = RainbowStripeColors_p;         
+    currentPalette = RainbowStripeColors_p;
     currentBlending = LINEARBLEND; 
   }
   
@@ -232,17 +243,92 @@ void colorPalettePurpleAndGreen() {
   FillLEDsFromPaletteColors(startIndex);
 }
 
-// ...............................ETC - fill from other things below
+void colorPaletteTotallyRandom() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
 
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    SetupTotallyRandomPalette();
+    currentBlending = LINEARBLEND;
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPaletteBlackAndWhiteStriped1() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    SetupBlackAndWhiteStripedPalette();
+    currentBlending = NOBLEND;
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPaletteBlackAndWhiteStriped2() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    SetupBlackAndWhiteStripedPalette();
+    currentBlending = LINEARBLEND;
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPaletteCloudColors() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    currentPalette = CloudColors_p;         
+    currentBlending = LINEARBLEND;
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+void colorPalettePartyColors() {
+  framesPS = 30;
+  static uint8_t startIndex = 0;
+
+  if (newPatt) {
+    newPatt = false;
+    startIndex = 0;
+    currentPalette = PartyColors_p;         
+    currentBlending = LINEARBLEND;
+  }
+  
+  startIndex = startIndex + 1; /* motion speed */
+  FillLEDsFromPaletteColors(startIndex);
+}
+
+/*
 void colorPalette() {
   framesPS = 30;
   ChangePalettePeriodically();
   
   static uint8_t startIndex = 0;
-  startIndex = startIndex + 1; /* motion speed */
+  startIndex = startIndex + 1;
   
   FillLEDsFromPaletteColors(startIndex);
 }
+*/
 
 void FillLEDsFromPaletteColors( uint8_t colorIndex)
 {
@@ -254,6 +340,7 @@ void FillLEDsFromPaletteColors( uint8_t colorIndex)
     }
 }
 
+/*
 void ChangePalettePeriodically()
 {
     uint8_t secondHand = (millis() / 1000) % 60;
@@ -274,6 +361,7 @@ void ChangePalettePeriodically()
         if( secondHand == 55)  { currentPalette = myRedWhiteBluePalette_p; currentBlending = LINEARBLEND; }
     }
 }
+*/
 
 // This function fills the palette with totally random colors.
 void SetupTotallyRandomPalette()
@@ -313,7 +401,7 @@ void SetupPurpleAndGreenPalette()
                                    purple, purple, black,  black );
 }
 
-
+/*
 // This example shows how to set up a static color palette
 // which is stored in PROGMEM (flash), which is almost always more
 // plentiful than RAM.  A static PROGMEM palette like this
@@ -338,7 +426,7 @@ const TProgmemPalette16 myRedWhiteBluePalette_p PROGMEM =
     CRGB::Blue,
     CRGB::Black,
     CRGB::Black
-};
+};*/
 
 //-----------------------------------------------------------
 
